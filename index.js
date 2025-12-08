@@ -27,11 +27,17 @@ async function run() {
    
     const db=client.db('assetverse');
     const packageCollections=db.collection('packages')
+    const featuresCollections=db.collection('features')
 
     // package api
 
 app.get('/packages',async(req,res)=>{
   const result=await packageCollections.find().toArray()
+  res.send(result)
+})
+// feature apis
+app.get('/features',async(req,res)=>{
+  const result=await featuresCollections.find().toArray()
   res.send(result)
 })
 
