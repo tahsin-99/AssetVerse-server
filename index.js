@@ -27,6 +27,7 @@ async function run() {
     const packageCollections = db.collection("packages");
     const featuresCollections = db.collection("features");
     const usersCollections = db.collection("users");
+    const assetCollections = db.collection("assets");
 
     // users api
 
@@ -35,6 +36,13 @@ async function run() {
       const result=await usersCollections.insertOne(userInfo)
       res.send(result)
     })
+    // asset api
+     app.post('/add-asset',async(req,res)=>{
+      const userInfo=req.body;
+      const result=await assetCollections.insertOne(userInfo)
+      res.send(result)
+     })
+
 
     // package api
 
