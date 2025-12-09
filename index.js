@@ -9,7 +9,38 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 app.use(express.json());
 app.use(cors());
 
+const  admin = require("firebase-admin");
+
+ const serviceAccount = require("./assetverse-firebase-adminsdk.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+})
+
+
+// const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString(
+//   'utf-8'
+// )
+
+
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@t-mongo.m4mnwdk.mongodb.net/?appName=T-mongo`;
+
+const verifyFBToken = async (req, res, next) => {
+  const token = req?.headers?.authorization?.split(' ')[1]
+
+  console.log(token);
+  
+  if (!token) return res.status(401).send({ message: 'Unauthorized Access!' })
+  try {
+    const decoded = await admin.auth().verifyIdToken(token)
+    req.tokenEmail = decoded.email
+    console.log(decoded)
+    next()
+  } catch (err) {
+    console.log(err)
+    return res.status(401).send({ message: 'Unauthorized Access!', err })
+  }
+}
 
 const client = new MongoClient(uri, {
   serverApi: {
@@ -43,8 +74,9 @@ async function run() {
       res.send(result)
      })
 
-     app.get("/assets-list", async (req, res) => {
-      const result = await assetCollections.find().toArray();
+     app.get("/assets-list",verifyFBToken,async (req, res) => {
+      
+      const result = await assetCollections.find({hrEmail:req.tokenEmail}).toArray();
       res.send(result);
     });
     app.delete(`/assets-list/:id`,async(req,res)=>{
