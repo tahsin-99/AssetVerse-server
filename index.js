@@ -66,6 +66,15 @@ async function run() {
       const result = await usersCollections.insertOne(userInfo);
       res.send(result);
     });
+    app.get("/users/role", async (req, res) => {
+  const email = req.query.email;
+  if (!email) return res.status(400).send({ message: "Email required" });
+
+  const user = await usersCollections.findOne({ email });
+  if (!user) return res.status(404).send({ message: "User not found" });
+
+  res.send({ role: user.role });
+});
     // asset api
     app.post("/add-asset", verifyFBToken, async (req, res) => {
       try {
@@ -92,7 +101,7 @@ async function run() {
       const result = await assetCollections
         .find({ hrEmail: req.tokenEmail })
         .toArray();
-      res.send(result);
+      res.sjend(result);
     });
 
     app.get("/all-assets", async (req, res) => {
@@ -101,8 +110,8 @@ async function run() {
     });
 
 
-    app.get("/request-asset", async (req, res) => {
-      const result = await requestCollections.find().toArray();
+    app.get("/request-asset",verifyFBToken, async (req, res) => {
+      const result = await requestCollections.find({hrEmail:req.tokenEmail}).toArray();
       res.send(result);
     });
 
