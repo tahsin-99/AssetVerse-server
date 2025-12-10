@@ -11,7 +11,7 @@ app.use(cors());
 
 const  admin = require("firebase-admin");
 
- const serviceAccount = require("./assetverse-firebase-adminsdk.json");
+ const serviceAccount = require("./assetverse_firebase_adminsdk.json");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
