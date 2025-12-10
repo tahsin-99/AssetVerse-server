@@ -9,38 +9,36 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 app.use(express.json());
 app.use(cors());
 
-const  admin = require("firebase-admin");
+const admin = require("firebase-admin");
 
- const serviceAccount = require("./assetverse_firebase_adminsdk.json");
+const serviceAccount = require("./assetverse_firebase_adminsdk.json");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-})
-
+});
 
 // const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString(
 //   'utf-8'
 // )
 
-
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@t-mongo.m4mnwdk.mongodb.net/?appName=T-mongo`;
 
 const verifyFBToken = async (req, res, next) => {
-  const token = req?.headers?.authorization?.split(' ')[1]
+  const token = req?.headers?.authorization?.split(" ")[1];
 
   console.log(token);
-  
-  if (!token) return res.status(401).send({ message: 'Unauthorized Access!' })
+
+  if (!token) return res.status(401).send({ message: "Unauthorized Access!" });
   try {
-    const decoded = await admin.auth().verifyIdToken(token)
-    req.tokenEmail = decoded.email
-    console.log(decoded)
-    next()
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.tokenEmail = decoded.email;
+    console.log(decoded);
+    next();
   } catch (err) {
-    console.log(err)
-    return res.status(401).send({ message: 'Unauthorized Access!', err })
+    console.log(err);
+    return res.status(401).send({ message: "Unauthorized Access!", err });
   }
-}
+};
 
 const client = new MongoClient(uri, {
   serverApi: {
@@ -59,44 +57,95 @@ async function run() {
     const featuresCollections = db.collection("features");
     const usersCollections = db.collection("users");
     const assetCollections = db.collection("assets");
+    const requestCollections = db.collection("requests");
 
     // users api
 
-    app.post('/users',async(req,res)=>{
-      const userInfo=req.body;
-      const result=await usersCollections.insertOne(userInfo)
-      res.send(result)
-    })
-    // asset api
-     app.post('/add-asset',async(req,res)=>{
-      const userInfo=req.body;
-      const result=await assetCollections.insertOne(userInfo)
-      res.send(result)
-     })
-
-     app.get("/assets-list",verifyFBToken,async (req, res) => {
-      
-      const result = await assetCollections.find({hrEmail:req.tokenEmail}).toArray();
+    app.post("/users", async (req, res) => {
+      const userInfo = req.body;
+      const result = await usersCollections.insertOne(userInfo);
       res.send(result);
     });
-    app.delete(`/assets-list/:id`,async(req,res)=>{
-      const id=req.params.id
-      const query={_id: new ObjectId(id)}
-      const result=await assetCollections.deleteOne(query)
-      res.send(result)
+    // asset api
+    app.post("/add-asset", verifyFBToken, async (req, res) => {
+      try {
+        const userEmail = req.tokenEmail;
 
-    })
-    app.patch(`/assets-list-update/:id`,async(req,res)=>{
-      const id=req.params.id
-      const updatedData=req.body
-      const query={_id: new ObjectId(id)}
-      const updateDoc={
-        $set:updatedData
+        const hrInfo = await usersCollections.findOne({ email: userEmail });
+
+        if (!hrInfo) {
+          return res.status(404).send({ message: "HR user not found" });
+        }
+        const assetData = req.body;
+        assetData.hrEmail = userEmail;
+        assetData.companyName = hrInfo.companyName;
+        assetData.dateAdded = new Date();
+        const result = await assetCollections.insertOne(assetData);
+        res.send(result);
+      } catch (err) {
+        console.log(err);
+        res.status(500).send({ message: "Failed to add asset", error: err });
       }
-      const result=await assetCollections.updateOne(query,updateDoc)
-      res.send(result)
-    })
-     
+    });
+
+    app.get("/assets-list", verifyFBToken, async (req, res) => {
+      const result = await assetCollections
+        .find({ hrEmail: req.tokenEmail })
+        .toArray();
+      res.send(result);
+    });
+
+    app.get("/all-assets", async (req, res) => {
+      const result = await assetCollections.find().toArray();
+      res.send(result);
+    });
+
+    app.post("/request-asset", verifyFBToken, async (req, res) => {
+      const { productId, employeeName, quantity } = req.body;
+      const employeeEmail = req.tokenEmail;
+      if (!productId || !employeeName || !quantity) {
+        return res.status(400).send({ message: "Missing fields" });
+      }
+      const asset = await assetCollections.findOne({
+        _id: new ObjectId(productId),
+      });
+      if (!asset) return res.status(404).send({ message: "Asset not found" });
+
+      const hr = await usersCollections.findOne({ email: asset.hrEmail });
+      const companyName = hr?.companyName || "";
+      const hrEmail = hr?.email || "";
+
+      const requestData = {
+        productId,
+        productName: asset.productName,
+        employeeName,
+        employeeEmail,
+        quantity: Number(quantity),
+        companyName,
+        hrEmail,
+        status: "pending",
+        date: new Date(),
+      };
+      const result = await requestCollections.insertOne(requestData);
+      res.send({ message: "Request submitted", requestId: result.insertedId });
+    });
+
+    app.delete(`/assets-list/:id`, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await assetCollections.deleteOne(query);
+      res.send(result);
+    });
+    app.patch(`/assets-list-update/:id`, async (req, res) => {
+      const id = req.params.id;
+      const updatedData = req.body;
+      const query = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: updatedData,
+      };
+      const result = await assetCollections.updateOne(query, updateDoc);
+      res.send(result);
+    });
 
     // package api
 
