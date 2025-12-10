@@ -100,6 +100,52 @@ async function run() {
       res.send(result);
     });
 
+
+    app.get("/request-asset", async (req, res) => {
+      const result = await requestCollections.find().toArray();
+      res.send(result);
+    });
+
+
+    app.patch(`/request-asset/:id`,
+      async (req, res) => {
+        const id = req.params.id;
+        const updatedData = req.body;
+        const request =await requestCollections.findOne({_id:new ObjectId(id)})
+        if(!request){
+           return res.status(404).send({ message: "Request not found" });
+        }
+            const { productId, quantity } = request;
+
+            const asset=await assetCollections.findOne({_id:new ObjectId(productId)})
+
+            if(!asset){
+             return res.status(404).send({ message: "Asset not found" });
+            }
+            if(asset.availableQuantity<quantity){
+              return  res
+        .status(400)
+        .send({ message: "Not enough asset quantity available" });
+            }
+
+            await assetCollections.updateOne(
+              {_id:new ObjectId(productId)},
+              {$inc:{availableQuantity:-quantity}}
+            )
+        const result = await requestCollections.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updatedData }
+        );
+        res.send({success:true,result})
+    });
+
+    app.delete(`/request-asset/:id`, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await requestCollections.deleteOne(query);
+      res.send(result);
+    });
+
     app.post("/request-asset", verifyFBToken, async (req, res) => {
       const { productId, employeeName, quantity } = req.body;
       const employeeEmail = req.tokenEmail;
