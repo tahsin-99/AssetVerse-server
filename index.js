@@ -26,13 +26,13 @@ const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@t-mongo
 const verifyFBToken = async (req, res, next) => {
   const token = req?.headers?.authorization?.split(" ")[1];
 
-  console.log(token);
+  
 
   if (!token) return res.status(401).send({ message: "Unauthorized Access!" });
   try {
     const decoded = await admin.auth().verifyIdToken(token);
     req.tokenEmail = decoded.email;
-    console.log(decoded);
+   
     next();
   } catch (err) {
     console.log(err);
@@ -66,7 +66,7 @@ async function run() {
       const result = await usersCollections.insertOne(userInfo);
       res.send(result);
     });
-    app.get("/users/role", async (req, res) => {
+    app.get("/users/role", verifyFBToken,async (req, res) => {
   const email = req.query.email;
   if (!email) return res.status(400).send({ message: "Email required" });
 
@@ -101,7 +101,7 @@ async function run() {
       const result = await assetCollections
         .find({ hrEmail: req.tokenEmail })
         .toArray();
-      res.sjend(result);
+      res.send(result);
     });
 
     app.get("/all-assets", async (req, res) => {
@@ -120,11 +120,39 @@ async function run() {
       async (req, res) => {
         const id = req.params.id;
         const updatedData = req.body;
+
+
         const request =await requestCollections.findOne({_id:new ObjectId(id)})
         if(!request){
            return res.status(404).send({ message: "Request not found" });
         }
-            const { productId, quantity } = request;
+        const { productId, quantity ,employeeEmail, hrEmail } = request;
+
+       
+
+        const hrUser=await usersCollections.findOne({email:hrEmail})
+
+         if (!hrUser) return res.status(404).send({ message: "HR not found" });
+
+         const alreadyApproved=await requestCollections.findOne({employeeEmail,
+          status:"approved"
+         })
+         if (!alreadyApproved && hrUser.packageLimit <= 0) {
+      return res.status(403).send({
+        message: "Your package limit is finished. Please make a payment.",
+        needPayment: true,
+      });
+    }
+       
+
+         if(hrUser.packageLimit<=0){
+           return res.status(403).send({
+      message: "Your package limit is finished. Please upgrade your plan.",
+      paymentRequired: true,})
+         }
+
+
+            
 
             const asset=await assetCollections.findOne({_id:new ObjectId(productId)})
 
@@ -141,11 +169,20 @@ async function run() {
               {_id:new ObjectId(productId)},
               {$inc:{availableQuantity:-quantity}}
             )
+            if(!alreadyApproved){
+              await usersCollections.updateOne({email:hrEmail},
+                {$inc:{packageLimit:-1}}
+              )
+            }
         const result = await requestCollections.updateOne(
           { _id: new ObjectId(id) },
           { $set: updatedData }
         );
-        res.send({success:true,result})
+
+      
+        res.send({success:true,
+          updated:request.modifiedCount,
+          result})
     });
 
     app.delete(`/request-asset/:id`, async (req, res) => {
