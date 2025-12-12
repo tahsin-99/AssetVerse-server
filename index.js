@@ -4,7 +4,7 @@ const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 3000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-
+const stripe=require('stripe')(process.env.STRIPE_SECRET_KEY)
 // middleware
 app.use(express.json());
 app.use(cors());
@@ -26,13 +26,11 @@ const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@t-mongo
 const verifyFBToken = async (req, res, next) => {
   const token = req?.headers?.authorization?.split(" ")[1];
 
-  
-
   if (!token) return res.status(401).send({ message: "Unauthorized Access!" });
   try {
     const decoded = await admin.auth().verifyIdToken(token);
     req.tokenEmail = decoded.email;
-   
+
     next();
   } catch (err) {
     console.log(err);
@@ -66,15 +64,15 @@ async function run() {
       const result = await usersCollections.insertOne(userInfo);
       res.send(result);
     });
-    app.get("/users/role", verifyFBToken,async (req, res) => {
-  const email = req.query.email;
-  if (!email) return res.status(400).send({ message: "Email required" });
+    app.get("/users/role", verifyFBToken, async (req, res) => {
+      const email = req.query.email;
+      if (!email) return res.status(400).send({ message: "Email required" });
 
-  const user = await usersCollections.findOne({ email });
-  if (!user) return res.status(404).send({ message: "User not found" });
+      const user = await usersCollections.findOne({ email });
+      if (!user) return res.status(404).send({ message: "User not found" });
 
-  res.send({ role: user.role });
-});
+      res.send({ role: user.role });
+    });
     // asset api
     app.post("/add-asset", verifyFBToken, async (req, res) => {
       try {
@@ -109,80 +107,79 @@ async function run() {
       res.send(result);
     });
 
-
-    app.get("/request-asset",verifyFBToken, async (req, res) => {
-      const result = await requestCollections.find({hrEmail:req.tokenEmail}).toArray();
+    app.get("/request-asset", verifyFBToken, async (req, res) => {
+      const result = await requestCollections
+        .find({ hrEmail: req.tokenEmail })
+        .toArray();
       res.send(result);
     });
 
 
-    app.patch(`/request-asset/:id`,
-      async (req, res) => {
-        const id = req.params.id;
-        const updatedData = req.body;
 
 
-        const request =await requestCollections.findOne({_id:new ObjectId(id)})
-        if(!request){
-           return res.status(404).send({ message: "Request not found" });
-        }
-        const { productId, quantity ,employeeEmail, hrEmail } = request;
+    app.patch(`/request-asset/:id`, async (req, res) => {
+      const id = req.params.id;
+      const updatedData = req.body;
 
-       
-
-        const hrUser=await usersCollections.findOne({email:hrEmail})
-
-         if (!hrUser) return res.status(404).send({ message: "HR not found" });
-
-         const alreadyApproved=await requestCollections.findOne({employeeEmail,
-          status:"approved"
-         })
-         if (!alreadyApproved && hrUser.packageLimit <= 0) {
-      return res.status(403).send({
-        message: "Your package limit is finished. Please make a payment.",
-        needPayment: true,
+      const request = await requestCollections.findOne({
+        _id: new ObjectId(id),
       });
-    }
-       
+      if (!request) {
+        return res.status(404).send({ message: "Request not found" });
+      }
+      const { productId, quantity, employeeEmail, hrEmail } = request;
 
-         if(hrUser.packageLimit<=0){
-           return res.status(403).send({
-      message: "Your package limit is finished. Please upgrade your plan.",
-      paymentRequired: true,})
-         }
+      const hrUser = await usersCollections.findOne({ email: hrEmail });
 
+      if (!hrUser) return res.status(404).send({ message: "HR not found" });
 
-            
+      const alreadyApproved = await requestCollections.findOne({
+        employeeEmail,
+        status: "approved",
+      });
+      if (!alreadyApproved && hrUser.packageLimit <= 0) {
+        return res.status(403).send({
+          message: "Your package limit is finished. Please make a payment.",
+          paymentRequired: true,
+        });
+      }
 
-            const asset=await assetCollections.findOne({_id:new ObjectId(productId)})
+      if (hrUser.packageLimit <= 0) {
+        return res.status(403).send({
+          message: "Your package limit is finished. Please upgrade your plan.",
+          paymentRequired: true,
+        });
+      }
 
-            if(!asset){
-             return res.status(404).send({ message: "Asset not found" });
-            }
-            if(asset.availableQuantity<quantity){
-              return  res
-        .status(400)
-        .send({ message: "Not enough asset quantity available" });
-            }
+      const asset = await assetCollections.findOne({
+        _id: new ObjectId(productId),
+      });
 
-            await assetCollections.updateOne(
-              {_id:new ObjectId(productId)},
-              {$inc:{availableQuantity:-quantity}}
-            )
-            if(!alreadyApproved){
-              await usersCollections.updateOne({email:hrEmail},
-                {$inc:{packageLimit:-1}}
-              )
-            }
-        const result = await requestCollections.updateOne(
-          { _id: new ObjectId(id) },
-          { $set: updatedData }
+      if (!asset) {
+        return res.status(404).send({ message: "Asset not found" });
+      }
+      if (asset.availableQuantity < quantity) {
+        return res
+          .status(400)
+          .send({ message: "Not enough asset quantity available" });
+      }
+
+      await assetCollections.updateOne(
+        { _id: new ObjectId(productId) },
+        { $inc: { availableQuantity: -quantity } }
+      );
+      if (!alreadyApproved) {
+        await usersCollections.updateOne(
+          { email: hrEmail },
+          { $inc: { packageLimit: -1 } }
         );
+      }
+      const result = await requestCollections.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updatedData }
+      );
 
-      
-        res.send({success:true,
-          updated:request.modifiedCount,
-          result})
+      res.send({ success: true, updated: request.modifiedCount, result });
     });
 
     app.delete(`/request-asset/:id`, async (req, res) => {
@@ -250,6 +247,39 @@ async function run() {
       const result = await featuresCollections.find().toArray();
       res.send(result);
     });
+
+    // payments api
+
+      app.post('/create-checkout-session',verifyFBToken,async(req,res)=>{
+        const paymentInfo=req.body
+        
+        const session=await stripe.checkout.sessions.create({
+           line_items: [
+      {
+       
+        price_data:{
+          currency:'usd',
+          product_data:{
+            name:paymentInfo?.packageName,
+            description: `Employee limit: ${paymentInfo?.employeeLimit}`
+            
+          },
+          unit_amount:paymentInfo?.price*100,
+        },
+        quantity: 1,
+      },
+    ],
+    customer_email:paymentInfo?.customer.email,
+    mode:'payment',
+    metadata:{
+      PackageId:String(paymentInfo?.packageId),
+      customerName: String(paymentInfo?.customer?.name),
+    },
+    success_url:`${process.env.CLIENT_DOMAIN}/payment-success`,
+    cancel_url:`${process.env.CLIENT_DOMAIN}/dashboard/payment`
+        })
+        res.send({url:session.url})
+      })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
