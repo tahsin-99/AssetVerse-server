@@ -127,8 +127,10 @@ async function run() {
 
     app.get("/my-assets", verifyFBToken, async (req, res) => {
       const searchText = req.query.searchText;
+       const assetType = req.query.assetType;
       const filter = {
         employeeEmail: req.tokenEmail,
+
       };
       if (searchText) {
         filter.productName = {
@@ -136,6 +138,10 @@ async function run() {
           $options: "i",
         };
       }
+      
+  if (assetType) {
+    filter.productType = assetType;
+  }
       const result = await requestCollections.find(filter).toArray();
       res.send(result);
     });
@@ -409,7 +415,7 @@ async function run() {
 
     const lastApproved = await requestCollections
       .find({ employeeEmail: email, status: "approved" })
-      .sort({ requestDate: -1 }) // newest first
+      .sort({ requestDate: -1 }) 
       .limit(1)
       .toArray();
 
