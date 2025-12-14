@@ -173,7 +173,7 @@ async function run() {
         productImage: asset.productImage,
         productType: asset.productType,
         companyName: hr?.companyName || "",
-
+      employeeImage: req.body.employeeImage || "",
         employeeName,
         employeeEmail,
         quantity: Number(quantity),
@@ -301,6 +301,65 @@ async function run() {
       const result = await assetCollections.updateOne(query, updateDoc);
       res.send(result);
     });
+
+ // Get all companies the user has approved assets in
+app.get("/my-companies", verifyFBToken, async (req, res) => {
+  try {
+    const myEmail = req.tokenEmail;
+
+    // Find all approved requests for this user
+    const approvedRequests = await requestCollections
+      .find({ employeeEmail: myEmail, status: "approved" })
+      .toArray();
+
+    // Extract unique company names
+    const companies = [...new Set(approvedRequests.map(r => r.companyName))];
+
+    res.send(companies);
+  } catch (err) {
+    console.log(err);
+    res.status(500).send({ message: "Server error", error: err });
+  }
+});
+
+// Get team members by company (or all companies if not filtered)
+app.get("/my-team", verifyFBToken, async (req, res) => {
+  try {
+    const myEmail = req.tokenEmail;
+    const selectedCompany = req.query.company; // optional
+
+    let filter = { status: "approved", employeeEmail: { $ne: myEmail } };
+    if (selectedCompany) {
+      filter.companyName = selectedCompany;
+    }
+
+    const colleagues = await requestCollections
+      .find(filter)
+      .project({
+        employeeName: 1,
+        employeeEmail: 1,
+          employeeImage: 1,
+        companyName: 1,
+        position: 1,
+        photoURL: 1,
+        _id: 0,
+      })
+      .toArray();
+
+    // Remove duplicates if someone has multiple approved requests
+    const uniqueColleagues = [
+      ...new Map(colleagues.map(item => [item.employeeEmail, item])).values()
+    ];
+
+    res.send(uniqueColleagues);
+  } catch (err) {
+    console.log(err);
+    res.status(500).send({ message: "Server error", error: err });
+  }
+});
+
+
+
 
     // package api
 
