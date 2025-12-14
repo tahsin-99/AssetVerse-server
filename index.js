@@ -83,7 +83,7 @@ async function run() {
 
       res.send(hr);
     });
-   
+
     // asset api
     app.post("/add-asset", verifyFBToken, async (req, res) => {
       try {
@@ -124,6 +124,21 @@ async function run() {
         .toArray();
       res.send(result);
     });
+
+    app.get("/my-assets", verifyFBToken, async (req, res) => {
+      const searchText = req.query.searchText;
+      const filter = {
+        employeeEmail: req.tokenEmail,
+      };
+      if (searchText) {
+        filter.productName = {
+          $regex: searchText,
+          $options: "i",
+        };
+      }
+      const result = await requestCollections.find(filter).toArray();
+      res.send(result);
+    });
     app.get("/affiliated-employee", verifyFBToken, async (req, res) => {
       const result = await requestCollections
         .find({ hrEmail: req.tokenEmail, status: "approved" })
@@ -148,20 +163,19 @@ async function run() {
 
       const requestData = {
         productId,
-    productName: asset.productName,
-    productImage: asset.productImage,
-    productType: asset.productType, 
-    companyName: hr?.companyName || "",
+        productName: asset.productName,
+        productImage: asset.productImage,
+        productType: asset.productType,
+        companyName: hr?.companyName || "",
 
-    employeeName,
-    employeeEmail,
-    quantity: Number(quantity),
+        employeeName,
+        employeeEmail,
+        quantity: Number(quantity),
 
-    hrEmail: asset.hrEmail,
+        hrEmail: asset.hrEmail,
 
-    status: "pending",
-    requestDate: new Date(),
-    
+        status: "pending",
+        requestDate: new Date(),
       };
       const result = await requestCollections.insertOne(requestData);
       res.send({ message: "Request submitted", requestId: result.insertedId });
@@ -329,12 +343,12 @@ async function run() {
       try {
         const { sessionId } = req.body;
         const session = await stripe.checkout.sessions.retrieve(sessionId);
-        
+
         const packageId = session.metadata.packageId;
         const customerEmail = session.customer_email;
 
         const paymentTran = await paymentCollections.findOne({
-          transectionId:session.payment_intent,
+          transectionId: session.payment_intent,
         });
 
         if (paymentTran) {
@@ -343,14 +357,12 @@ async function run() {
             message: "Payment already processed",
           });
         }
-        
+
         if (session.payment_status !== "paid") {
           return res
             .status(400)
             .send({ message: "Payment was not successful" });
         }
-
-       
 
         const pack = await packageCollections.findOne({
           _id: new ObjectId(packageId),
@@ -359,15 +371,13 @@ async function run() {
         if (!pack)
           return res.status(404).send({ message: "Package not found" });
 
-          await usersCollections.updateOne(
+        await usersCollections.updateOne(
           { email: customerEmail },
           {
             $inc: { packageLimit: pack.employeeLimit },
             $set: { lastPackageName: pack.name },
           }
         );
-
-       
 
         const orderInfo = {
           packageId: session.metadata.PackageId,
@@ -392,7 +402,21 @@ async function run() {
         return res.status(500).send({ message: "Server error", error: err });
       }
     });
+ 
+   app.get("/profile", verifyFBToken, async (req, res) => {
+  
+    const email = req.tokenEmail;
 
+    const lastApproved = await requestCollections
+      .find({ employeeEmail: email, status: "approved" })
+      .sort({ requestDate: -1 }) // newest first
+      .limit(1)
+      .toArray();
+
+    const lastCompany = lastApproved[0]?.companyName || null;
+
+    res.send({ lastCompany });
+  })
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
