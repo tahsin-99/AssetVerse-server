@@ -17,10 +17,6 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-// const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString(
-//   'utf-8'
-// )
-
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@t-mongo.m4mnwdk.mongodb.net/?appName=T-mongo`;
 
 const verifyFBToken = async (req, res, next) => {
@@ -84,8 +80,6 @@ async function run() {
       res.send(hr);
     });
 
-
-  
     // asset api
     app.post("/add-asset", verifyFBToken, async (req, res) => {
       try {
@@ -120,6 +114,34 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/analytics/asset-types", verifyFBToken, async (req, res) => {
+      const hrEmail = req.tokenEmail;
+
+      const result = await assetCollections
+        .aggregate([
+          { $match: { hrEmail } },
+          {
+            $group: {
+              _id: "$productType",
+              value: { $sum: 1 },
+            },
+          },
+          {
+            $project: {
+              name: "$_id",
+              value: 1,
+              _id: 0,
+            },
+          },
+        ])
+        .toArray();
+
+      res.send(result);
+    });
+
+    // request asset
+    
+
     app.get("/request-asset", verifyFBToken, async (req, res) => {
       const result = await requestCollections
         .find({ hrEmail: req.tokenEmail })
@@ -129,10 +151,9 @@ async function run() {
 
     app.get("/my-assets", verifyFBToken, async (req, res) => {
       const searchText = req.query.searchText;
-       const assetType = req.query.assetType;
+      const assetType = req.query.assetType;
       const filter = {
         employeeEmail: req.tokenEmail,
-
       };
       if (searchText) {
         filter.productName = {
@@ -140,10 +161,10 @@ async function run() {
           $options: "i",
         };
       }
-      
-  if (assetType) {
-    filter.productType = assetType;
-  }
+
+      if (assetType) {
+        filter.productType = assetType;
+      }
       const result = await requestCollections.find(filter).toArray();
       res.send(result);
     });
@@ -155,7 +176,7 @@ async function run() {
     });
 
     app.post("/request-asset", verifyFBToken, async (req, res) => {
-      const { productId, employeeName, quantity,birthDate } = req.body;
+      const { productId, employeeName, quantity, birthDate } = req.body;
       const employeeEmail = req.tokenEmail;
       if (!productId || !employeeName || !quantity) {
         return res.status(400).send({ message: "Missing fields" });
@@ -175,11 +196,11 @@ async function run() {
         productImage: asset.productImage,
         productType: asset.productType,
         companyName: hr?.companyName || "",
-      employeeImage: req.body.employeeImage || "",
+        employeeImage: req.body.employeeImage || "",
         employeeName,
         employeeEmail,
         quantity: Number(quantity),
-        birthDate:birthDate,
+        birthDate: birthDate,
         hrEmail: asset.hrEmail,
 
         status: "pending",
@@ -261,6 +282,30 @@ async function run() {
       res.send({ success: true, updated: request.modifiedCount, result });
     });
 
+
+    app.get("/analytics/top-requested-assets", verifyFBToken, async (req, res) => {
+  try {
+    const hrEmail = req.tokenEmail;
+
+    const data = await requestCollections.aggregate([
+      { $match: { hrEmail } },   
+      {
+        $group: {
+          _id: "$productName",
+          totalRequests: { $sum: 1 }
+        }
+      },
+      { $sort: { totalRequests: -1 } },
+      { $limit: 5 }
+    ]).toArray();
+
+    res.send(data);
+  } catch (error) {
+    res.status(500).send({ message: "Failed to load analytics" });
+  }
+});
+
+
     app.delete(`/affiliated-employee/:id`, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -304,90 +349,86 @@ async function run() {
       res.send(result);
     });
 
- // Get all companies the user has approved assets in
-app.get("/my-companies", verifyFBToken, async (req, res) => {
-  try {
-    const myEmail = req.tokenEmail;
+    // Get all companies the user has approved assets in
+    app.get("/my-companies", verifyFBToken, async (req, res) => {
+      try {
+        const myEmail = req.tokenEmail;
 
-    // Find all approved requests for this user
-    const approvedRequests = await requestCollections
-      .find({ employeeEmail: myEmail, status: "approved" })
-      .toArray();
+        // Find all approved requests for this user
+        const approvedRequests = await requestCollections
+          .find({ employeeEmail: myEmail, status: "approved" })
+          .toArray();
 
-    // Extract unique company names
-    const companies = [...new Set(approvedRequests.map(r => r.companyName))];
+        // Extract unique company names
+        const companies = [
+          ...new Set(approvedRequests.map((r) => r.companyName)),
+        ];
 
-    res.send(companies);
-  } catch (err) {
-    console.log(err);
-    res.status(500).send({ message: "Server error", error: err });
-  }
-});
+        res.send(companies);
+      } catch (err) {
+        console.log(err);
+        res.status(500).send({ message: "Server error", error: err });
+      }
+    });
 
+    app.get("/my-team", verifyFBToken, async (req, res) => {
+      try {
+        const myEmail = req.tokenEmail;
+        const selectedCompany = req.query.company;
 
-app.get("/my-team", verifyFBToken, async (req, res) => {
-  try {
-    const myEmail = req.tokenEmail;
-    const selectedCompany = req.query.company; 
+        let filter = { status: "approved", employeeEmail: { $ne: myEmail } };
+        if (selectedCompany) {
+          filter.companyName = selectedCompany;
+        }
 
-    let filter = { status: "approved", employeeEmail: { $ne: myEmail } };
-    if (selectedCompany) {
-      filter.companyName = selectedCompany;
-    }
+        const colleagues = await requestCollections
+          .find(filter)
+          .project({
+            employeeName: 1,
+            employeeEmail: 1,
+            employeeImage: 1,
+            position: 1,
+            companyName: 1,
+            birthDate: 1,
+            _id: 0,
+          })
+          .toArray();
 
-  
-    
+        const unique = [
+          ...new Map(colleagues.map((e) => [e.employeeEmail, e])).values(),
+        ];
 
-       const colleagues = await requestCollections
-      .find(filter)
-      .project({
-        employeeName: 1,
-        employeeEmail: 1,
-        employeeImage: 1,
-        position: 1,
-        companyName: 1,
-        birthDate: 1,
-        _id: 0,
-      })
-      .toArray();
+        res.send(unique);
+      } catch (err) {
+        console.log(err);
+        res.status(500).send({ message: "Server error", error: err });
+      }
+    });
 
-    const unique = [
-      ...new Map(colleagues.map(e => [e.employeeEmail, e])).values(),
-    ];
+    app.get("/my-team/birthdays", verifyFBToken, async (req, res) => {
+      const company = req.query.company;
+      const currentMonth = new Date().getMonth(); // 0-11
 
-    res.send(unique);
-  } catch (err) {
-    console.log(err);
-    res.status(500).send({ message: "Server error", error: err });
-  }
-});
+      let filter = {
+        status: "approved",
+        birthDate: { $ne: null },
+      };
 
-app.get("/my-team/birthdays", verifyFBToken, async (req, res) => {
-  const company = req.query.company;
-  const currentMonth = new Date().getMonth(); // 0-11
+      if (company) filter.companyName = company;
 
-  let filter = {
-    status: "approved",
-    birthDate: { $ne: null },
-  };
+      const users = await requestCollections.find(filter).toArray();
 
-  if (company) filter.companyName = company;
+      const birthdays = users.filter((u) => {
+        const bd = new Date(u.birthDate);
+        return bd.getMonth() === currentMonth;
+      });
 
-  const users = await requestCollections.find(filter).toArray();
+      const uniqueBirthdays = [
+        ...new Map(birthdays.map((e) => [e.employeeEmail, e])).values(),
+      ];
 
-  const birthdays = users.filter(u => {
-    const bd = new Date(u.birthDate);
-    return bd.getMonth() === currentMonth;
-  });
-
-  const uniqueBirthdays = [
-    ...new Map(birthdays.map(e => [e.employeeEmail, e])).values(),
-  ];
-
-  res.send(uniqueBirthdays);
-});
-
-
+      res.send(uniqueBirthdays);
+    });
 
     // package api
 
@@ -497,58 +538,55 @@ app.get("/my-team/birthdays", verifyFBToken, async (req, res) => {
     });
     // profile api
 
-    app.get('/profile', verifyFBToken, async (req, res) => {
-  const email = req.tokenEmail
+    app.get("/profile", verifyFBToken, async (req, res) => {
+      const email = req.tokenEmail;
 
-  const user = await usersCollections.findOne({ email });
+      const user = await usersCollections.findOne({ email });
 
-  if (!user) {
-    return res.status(404).send({ message: 'User not found' });
-  }
+      if (!user) {
+        return res.status(404).send({ message: "User not found" });
+      }
 
-  res.send(user);
-});
+      res.send(user);
+    });
 
+    app.patch("/profile", verifyFBToken, async (req, res) => {
+      try {
+        const email = req.tokenEmail;
+        const { name, image } = req.body;
 
-app.patch('/profile', verifyFBToken, async (req, res) => {
-  try {
-    const email = req.tokenEmail;
-    const { name, image } = req.body;
+        const updateDoc = {
+          $set: {
+            name,
+            image,
+          },
+        };
 
-    const updateDoc = {
-      $set: {
-        name,
-        image,
-      },
-    };
+        const result = await usersCollections.updateOne({ email }, updateDoc);
 
-    const result = await usersCollections.updateOne(
-      { email },
-      updateDoc
-    );
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: "User not found" });
+        }
 
-    if (result.matchedCount === 0) {
-      return res.status(404).send({ message: 'User not found' });
-    }
+        res.send({ success: true, message: "Profile updated" });
+      } catch (error) {
+        console.log(error);
+        res.status(500).send({ message: "Failed to update profile" });
+      }
+    });
 
-    res.send({ success: true, message: 'Profile updated' });
-  } catch (error) {
-    console.log(error);
-    res.status(500).send({ message: 'Failed to update profile' });
-  }
-});
+    app.get("/my-companies", verifyFBToken, async (req, res) => {
+      const myEmail = req.tokenEmail;
+      const approvedRequests = await requestCollections
+        .find({ employeeEmail: myEmail, status: "approved" })
+        .toArray();
 
- 
- app.get("/my-companies", verifyFBToken, async (req, res) => {
-  const myEmail = req.tokenEmail;
-  const approvedRequests = await requestCollections
-    .find({ employeeEmail: myEmail, status: "approved" })
-    .toArray();
+      const companies = [
+        ...new Set(approvedRequests.map((r) => r.companyName)),
+      ];
 
-  const companies = [...new Set(approvedRequests.map(r => r.companyName))];
-
-  res.send(companies);
-});
+      res.send(companies);
+    });
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
