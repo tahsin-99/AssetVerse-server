@@ -11,7 +11,8 @@ app.use(cors());
 
 const admin = require("firebase-admin");
 
-const serviceAccount = require("./assetverse_firebase_adminsdk.json");
+const decoded = Buffer.from(process.env.FIREBASE_SERVICE_KEY, "base64").toString("utf8");
+const serviceAccount = JSON.parse(decoded);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -44,7 +45,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
+   
 
     const db = client.db("assetverse");
     const packageCollections = db.collection("packages");
@@ -354,17 +355,17 @@ async function run() {
       res.send(result);
     });
 
-    // Get all companies the user has approved assets in
+    
     app.get("/my-companies", verifyFBToken, async (req, res) => {
       try {
         const myEmail = req.tokenEmail;
 
-        // Find all approved requests for this user
+        
         const approvedRequests = await requestCollections
           .find({ employeeEmail: myEmail, status: "approved" })
           .toArray();
 
-        // Extract unique company names
+       
         const companies = [
           ...new Set(approvedRequests.map((r) => r.companyName)),
         ];
@@ -533,7 +534,7 @@ async function run() {
             message: "Payment processed & saved",
           });
         } catch (err) {
-          // In case another request already inserted it
+        
           console.log("Payment already inserted:", err.message);
         }
       } catch (err) {
@@ -592,13 +593,13 @@ async function run() {
 
       res.send(companies);
     });
-    await client.db("admin").command({ ping: 1 });
+    
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
   } finally {
     // Ensures that the client will close when you finish/error
-    // await client.close();
+
   }
 }
 run().catch(console.dir);
