@@ -103,10 +103,15 @@ async function run() {
     });
 
     app.get("/assets-list", verifyFBToken, async (req, res) => {
-      const result = await assetCollections
-        .find({ hrEmail: req.tokenEmail })
+      const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip=(page-1)*limit
+    const totalAssets = await assetCollections.countDocuments();
+    totalPages=Math.ceil(totalAssets/limit)
+      const assets = await assetCollections
+        .find({ hrEmail: req.tokenEmail }).sort({dateAdded:-1}).limit(limit).skip(skip).project()
         .toArray();
-      res.send(result);
+      res.send({assets,totalAssets,totalPages,currentPage:page});
     });
 
     app.get("/all-assets", async (req, res) => {
