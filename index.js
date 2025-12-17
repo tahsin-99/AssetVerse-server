@@ -11,7 +11,10 @@ app.use(cors());
 
 const admin = require("firebase-admin");
 
-const decoded = Buffer.from(process.env.FIREBASE_SERVICE_KEY, "base64").toString("utf8");
+const decoded = Buffer.from(
+  process.env.FIREBASE_SERVICE_KEY,
+  "base64"
+).toString("utf8");
 const serviceAccount = JSON.parse(decoded);
 
 admin.initializeApp({
@@ -45,8 +48,6 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-   
-
     const db = client.db("assetverse");
     const packageCollections = db.collection("packages");
     const featuresCollections = db.collection("features");
@@ -105,14 +106,18 @@ async function run() {
 
     app.get("/assets-list", verifyFBToken, async (req, res) => {
       const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip=(page-1)*limit
-    const totalAssets = await assetCollections.countDocuments();
-    totalPages=Math.ceil(totalAssets/limit)
+      const limit = parseInt(req.query.limit) || 10;
+      const skip = (page - 1) * limit;
+      const totalAssets = await assetCollections.countDocuments();
+      totalPages = Math.ceil(totalAssets / limit);
       const assets = await assetCollections
-        .find({ hrEmail: req.tokenEmail }).sort({dateAdded:-1}).limit(limit).skip(skip).project()
+        .find({ hrEmail: req.tokenEmail })
+        .sort({ dateAdded: -1 })
+        .limit(limit)
+        .skip(skip)
+        .project()
         .toArray();
-      res.send({assets,totalAssets,totalPages,currentPage:page});
+      res.send({ assets, totalAssets, totalPages, currentPage: page });
     });
 
     app.get("/all-assets", async (req, res) => {
@@ -146,7 +151,6 @@ async function run() {
     });
 
     // request asset
-    
 
     app.get("/request-asset", verifyFBToken, async (req, res) => {
       const result = await requestCollections
@@ -288,29 +292,33 @@ async function run() {
       res.send({ success: true, updated: request.modifiedCount, result });
     });
 
+    app.get(
+      "/analytics/top-requested-assets",
+      verifyFBToken,
+      async (req, res) => {
+        try {
+          const hrEmail = req.tokenEmail;
 
-    app.get("/analytics/top-requested-assets", verifyFBToken, async (req, res) => {
-  try {
-    const hrEmail = req.tokenEmail;
+          const data = await requestCollections
+            .aggregate([
+              { $match: { hrEmail } },
+              {
+                $group: {
+                  _id: "$productName",
+                  totalRequests: { $sum: 1 },
+                },
+              },
+              { $sort: { totalRequests: -1 } },
+              { $limit: 5 },
+            ])
+            .toArray();
 
-    const data = await requestCollections.aggregate([
-      { $match: { hrEmail } },   
-      {
-        $group: {
-          _id: "$productName",
-          totalRequests: { $sum: 1 }
+          res.send(data);
+        } catch (error) {
+          res.status(500).send({ message: "Failed to load analytics" });
         }
-      },
-      { $sort: { totalRequests: -1 } },
-      { $limit: 5 }
-    ]).toArray();
-
-    res.send(data);
-  } catch (error) {
-    res.status(500).send({ message: "Failed to load analytics" });
-  }
-});
-
+      }
+    );
 
     app.delete(`/affiliated-employee/:id`, async (req, res) => {
       const id = req.params.id;
@@ -355,17 +363,14 @@ async function run() {
       res.send(result);
     });
 
-    
     app.get("/my-companies", verifyFBToken, async (req, res) => {
       try {
         const myEmail = req.tokenEmail;
 
-        
         const approvedRequests = await requestCollections
           .find({ employeeEmail: myEmail, status: "approved" })
           .toArray();
 
-       
         const companies = [
           ...new Set(approvedRequests.map((r) => r.companyName)),
         ];
@@ -520,12 +525,13 @@ async function run() {
         );
 
         const orderInfo = {
-          packageId: session.metadata.PackageId,
+          packageId: session.metadata.packageId,
           transectionId: session.payment_intent,
           customerEmail: session.customer_email,
+         packageName:pack.name,
           price: session.amount_total / 100,
           paymentStatus: session.payment_status,
-          date: new Date().toLocaleString(),
+          date: new Date()
         };
         try {
           await paymentCollections.insertOne(orderInfo);
@@ -534,7 +540,6 @@ async function run() {
             message: "Payment processed & saved",
           });
         } catch (err) {
-        
           console.log("Payment already inserted:", err.message);
         }
       } catch (err) {
@@ -542,6 +547,19 @@ async function run() {
         return res.status(500).send({ message: "Server error", error: err });
       }
     });
+
+    app.get("/payment-history", verifyFBToken, async (req, res) => {
+  const hrEmail = req.tokenEmail;
+  const result = await paymentCollections
+    .find({ customerEmail: hrEmail })
+    .sort({ date: -1 })
+    .toArray();
+  
+    res.send(result)
+  
+  })
+    
+
     // profile api
 
     app.get("/profile", verifyFBToken, async (req, res) => {
@@ -593,13 +611,12 @@ async function run() {
 
       res.send(companies);
     });
-    
+
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
   } finally {
     // Ensures that the client will close when you finish/error
-
   }
 }
 run().catch(console.dir);
