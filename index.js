@@ -56,6 +56,14 @@ async function run() {
     const requestCollections = db.collection("requests");
     const paymentCollections = db.collection("payments");
 
+    const contactsCollections=db.collection("contacts")
+
+    // contacts
+app.post ('/contacts',async(req,res)=>{
+  const userinfo=req.body
+  const result= await contactsCollections.insertOne(userinfo)
+  res.send(result)
+})
     // users api
 
     app.post("/users", async (req, res) => {
