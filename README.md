@@ -1,50 +1,74 @@
-##Project Name:AssetVerse
-##Purpose:Corporate Asset Management System
-##Live URL:https://assetverse00.netlify.app/
-##Key Feature List:
-1.Employee /Hr login
-2.Role based access
-3.Add, update, and delete assets
-4.Assign assets to employees
-5.Returnable and non-returnable assets
-6.Add and manage employees
-7.Track asset allocation
-8.Upcoming birthdays / notifications
-9.Overview of assets and employees
-10.Pending requests and approvals
-11.Stripe integration for asset purchases
-12.Fully responsive UI for desktop and mobile
-13.Tailwind CSS + DaisyUI
+# AssetVerse  
+**Corporate Asset Management System**
 
+![Netlify](https://img.shields.io/badge/Deployed%20on-Netlify-00C7B7?logo=netlify&logoColor=white)
+![Node.js](https://img.shields.io/badge/Backend-Node.js-339933?logo=node.js&logoColor=white)
+![Express.js](https://img.shields.io/badge/Framework-Express.js-000000?logo=express&logoColor=white)
+![MongoDB](https://img.shields.io/badge/Database-MongoDB-47A248?logo=mongodb&logoColor=white)
+![Firebase](https://img.shields.io/badge/Auth-Firebase-FFCA28?logo=firebase&logoColor=black)
+![Stripe](https://img.shields.io/badge/Payments-Stripe-635BFF?logo=stripe&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/UI-Tailwind_CSS-38B2AC?logo=tailwind-css&logoColor=white)
+![DaisyUI](https://img.shields.io/badge/Component-DaisyUI-5A0EF8?logo=daisyui&logoColor=white)
+![Responsive](https://img.shields.io/badge/Design-Fully_Responsive-success)
+![License](https://img.shields.io/badge/License-MIT-blue)
 
+🔗 **Live Website:** https://assetverse00.netlify.app/
 
-##npm packages:
-1.cors
-2.dotenv
-3.express
-4.firebase-admin
-5.mongodb
-6.stripe
+---
 
+## 📌 About the Project
 
+**AssetVerse** is a full-stack corporate asset management system that helps organizations manage company assets, employees, and asset allocation efficiently with secure role-based access and real-time tracking.
 
-##Setup instruction
-1.cd AssetVerse
-2.npm install
-3.npm run start
+---
 
+## 🚀 Features
 
+- 🔐 Employee & HR login system  
+- 🧑‍💼 Role-based access control  
+- ➕ Add, update, and delete assets  
+- 📦 Assign assets to employees  
+- 🔁 Returnable & non-returnable asset support  
+- 👥 Add and manage employees  
+- 📊 Track asset allocation history  
+- 🎂 Upcoming birthdays & notifications  
+- 📈 Dashboard overview of assets and employees  
+- ⏳ Pending requests & approval workflow  
+- 💳 Stripe payment integration for asset purchases  
+- 📱 Fully responsive design (desktop & mobile)  
+- 🎨 Tailwind CSS + DaisyUI UI components  
 
-##Environment Variables Configaration
-1.DB_USER=your mongo db user name
-2.DB_PASS= your mongo db password
-3.STRIPE_SECRET_KEY=yor stripe secret key
-4.FIREBASE_PRIVATE_KEY=your firebase private key
-5.CLIENT_SITE_URL=your client site live link
+---
 
+## 🛠 Tech Stack
 
+### Frontend
+- React
+- Tailwind CSS
+- DaisyUI
 
+### Backend
+- Node.js
+- Express.js
+- MongoDB
+- Firebase Admin
+- Stripe
 
+---
 
+## 📦 NPM Packages Used
 
+- cors  
+- dotenv  
+- express  
+- firebase-admin  
+- mongodb  
+- stripe  
 
+---
+
+## ⚙️ Installation & Setup
+
+### 1️⃣ Clone the Repository
+```bash
+git clone https://github.com/your-username/AssetVerse.git
